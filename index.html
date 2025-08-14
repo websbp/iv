@@ -379,7 +379,7 @@
     <p class="footer">MOS = (IV Base − Basis Price) / IV Base. Basis Price depends on scenario (Current / IV Base / 15% Disc / 25% Disc).</p>
   </section>
 
-  <div class="footer">v1.0.0.2</div>
+  <div class="footer">v1.0.0.3</div>
 </div>
 
 <script>
@@ -586,7 +586,7 @@
       }
     }
 
-    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    if (btn) { btn.disabled = false; btn.textContent = '↻'; }
   }
 
   // === Google Sheet Export ===
@@ -874,7 +874,7 @@
     } catch (err) {
       alert('Export failed: ' + err.message);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '⇪ Export'; }
+      if (btn) { btn.disabled = false; btn.textContent = '⇪'; }
     }
   }
 
@@ -959,7 +959,7 @@
     refreshVisiblePrices().catch(() => {
       // fail-safe: re-enable button
       btnRefreshAll.disabled = false;
-      btnRefreshAll.textContent = '↻ Refresh';
+      btnRefreshAll.textContent = '↻';
     });
   });
 
