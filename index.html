@@ -125,6 +125,8 @@
       }
       /* Delete button row aligns right */
       #watchTable td[data-label="Delete"]{display:flex;justify-content:flex-end}
+      /* hide bulk Years */
+      #bulkYears { display:none !important; }
     }
 
     /* Make header action buttons flexible on phones */
@@ -216,6 +218,18 @@
         <button id="fltNone"    type="button" class="active" aria-selected="true">All</button>
         <button id="fltHighBtn" type="button">High Growth</button>
         <button id="fltLowBtn"  type="button">Low Growth</button>
+      </div>
+      <!-- Bulk set Years -->
+      <div id="bulkYears" class="right" style="display:flex;align-items:center;gap:8px">
+        <span class="muted">Years:</span>
+        <div class="seg small" role="tablist" aria-label="Projection Years">
+          <button id="bulkY_1" data-years="1" class="active" aria-selected="true">1</button>
+          <button id="bulkY_2" data-years="2">2</button>
+          <button id="bulkY_5" data-years="5">5</button>
+          <button id="bulkY_custom">Custom</button>
+        </div>
+        <input id="bulkYearsCustom" type="number" min="1" step="1" style="width:72px;display:none" placeholder="Years">
+        <button id="bulkYearsApply" class="btn small" type="button">Apply to all</button>
       </div>
       <div class="right">
         <button id="btnExportAll" class="btn small" type="button">⇪</button>
@@ -379,7 +393,7 @@
     <p class="footer">MOS = (IV Base − Basis Price) / IV Base. Basis Price depends on scenario (Current / IV Base / 15% Disc / 25% Disc).</p>
   </section>
 
-  <div class="footer">v1.0.0.6</div>
+  <div class="footer">v1.0.0.7</div>
 </div>
 
 <script>
@@ -436,6 +450,9 @@
         }
       })();
     }
+
+    // wire the bulk Years control
+    wireBulkYears();
   }
 
   function persist(){
@@ -854,7 +871,7 @@
     };
 
     const btn = document.getElementById('btnExportAll');
-    if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
       const finalUrl = url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
       const res = await fetch(finalUrl, {
@@ -892,6 +909,55 @@
     });
   }
 
+  // ---- Bulk Years ----
+  function wireBulkYears(){
+    const box = document.getElementById('bulkYears');
+    if (!box) return;
+
+    const btns = box.querySelectorAll('.seg button');
+    const btnCustom = document.getElementById('bulkY_custom');
+    const inpCustom = document.getElementById('bulkYearsCustom');
+    const btnApply  = document.getElementById('bulkYearsApply');
+
+    // toggle active button + show/hide custom input
+    btns.forEach(b=>{
+      b.addEventListener('click', ()=>{
+        btns.forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        const isCustom = (b === btnCustom);
+        inpCustom.style.display = isCustom ? '' : 'none';
+        if (isCustom) setTimeout(()=>inpCustom.focus(), 0);
+      });
+    });
+
+    // Apply to all companies
+    btnApply.addEventListener('click', ()=>{
+      // Determine target years
+      const active = box.querySelector('.seg button.active');
+      let y = active?.dataset?.years ? parseInt(active.dataset.years,10) : NaN;
+      if (active === btnCustom){
+        y = parseInt(inpCustom.value, 10);
+      }
+      if (!Number.isFinite(y) || y <= 0){
+        alert('Please enter a valid positive number of years.'); return;
+      }
+      if (!companies || companies.length === 0){
+        alert('No companies to update.'); return;
+      }
+      if (!confirm(`Set Years = ${y} for ALL companies?`)) return;
+
+      // Update local data
+      companies.forEach(c => { c.years = y; });
+      try { localStorage.setItem(STORAGE, JSON.stringify(companies)); } catch(_){}
+      renderWatchlist();
+
+      // Always sync to Google Sheet after bulk update
+      if (typeof exportAllToGoogle === 'function') {
+        exportAllToGoogle();
+      }
+
+    });
+  }
 
   // --- UI State ---
   const tabs = $$(".tabs button");
