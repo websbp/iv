@@ -379,7 +379,7 @@
     <p class="footer">MOS = (IV Base − Basis Price) / IV Base. Basis Price depends on scenario (Current / IV Base / 15% Disc / 25% Disc).</p>
   </section>
 
-  <div class="footer">v1.0.0.5</div>
+  <div class="footer">v1.0.0.6</div>
 </div>
 
 <script>
@@ -982,7 +982,10 @@
     renderDpsTable();
     renderDerived();
   }
-  $("#c_name").addEventListener("input",(e)=>{form.name=e.target.value;});
+  $("#c_name").addEventListener("input",(e)=>{
+    form.name = e.target.value;
+    renderChart();              // <- ensure chart title updates immediately
+  });
   $("#c_ticker").addEventListener("input",(e)=>{form.ticker=e.target.value.toUpperCase();});
   $("#c_price").addEventListener("input",(e)=>{form.currentPrice=parseFloat(e.target.value)||0; $("#basisPrice").value=form.currentPrice||0; renderDerived();});
   $("#parsePaste").addEventListener("click",()=>{
@@ -1068,12 +1071,23 @@
     const el = $("#chartArea"); el.innerHTML="";
     const rows = form.historical.slice().sort((a,b)=>(a.fy>b.fy?1:-1));
     if(!rows.length){ el.innerHTML='<div class="help">No data to chart.</div>'; return; }
-    const pad=40, w=el.clientWidth||800, h=el.clientHeight||360, left=55, right=20, top=20, bottom=30;
+    const pad=40, w=el.clientWidth||800, h=el.clientHeight||360, left=55, right=20, top=50, bottom=30;
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS,"svg");
     svg.setAttribute("width","100%"); svg.setAttribute("height","100%");
     svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
     el.appendChild(svg);
+
+    // Title: "{Company} Intrinsic Value vs. Price"
+    const title = document.createElementNS(svgNS, "text");
+    title.setAttribute("x", w/2);
+    title.setAttribute("y", 22);              // sits above legend & plot area
+    title.setAttribute("text-anchor", "middle");
+    title.setAttribute("fill", "#cbd5e1");     // slate-300-ish; tweak as you like
+    title.setAttribute("font-size", "16");
+    title.setAttribute("font-weight", "600");
+    title.textContent = `${form.name || 'Company'} Intrinsic Value vs. Price`;
+    svg.appendChild(title);
 
     const xs = rows.map(r=>r.fy);
     const vals = [];
@@ -1327,11 +1341,11 @@
         <td class="col-action" data-label="Action">${r.action}</td>
 
         <td data-label="Year" class="num">${r.years||0}</td>
-        <td data-label="CAGR%" class="num">${isFinite(r.cagr)? (r.cagr*100).toFixed(2)+"%":"-"}</td>
+        <td data-label="CAGR%" class="num">${isFinite(r.cagr)? (r.cagr*100).toFixed(1)+"%":"-"}</td>
         <td data-label="IV Base" class="num">${currency(r.ivBase)}</td>
-        <td data-label="IVg%" class="num">${(r.ivg||0).toFixed(2)}%</td>
+        <td data-label="IVg%" class="num">${(r.ivg||0).toFixed(1)}%</td>
         <td data-label="DPS" class="num">${currency(r.dpsBase)}</td>
-        <td data-label="DPSg%" class="num">${(r.dpsg||0).toFixed(2)}%</td>
+        <td data-label="DPSg%" class="num">${(r.dpsg||0).toFixed(1)}%</td>
         <td data-label="Notes" class="muted">${r.notes}</td>
         <td class="num col-delete" data-label="Delete"><button class="btn small danger">Delete</button></td>
       `;
