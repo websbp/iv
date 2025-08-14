@@ -380,6 +380,8 @@
             companies = rowsToCompanies(snap);
             persist();
             renderWatchlist();
+            // One-time bootstrap to fill prices right after initial pull
+            refreshVisiblePrices(); // no await needed
           }
         }catch(err){
           console.log('Initial pull failed:', err);
@@ -665,6 +667,10 @@
         currentPrice: 0,
         historical: [],
         dps: [],
+        // ← seeds (from watchlist) used when historical/DPS tabs are empty
+        ivBaseSeed: Number(ivBase) || 0,
+        dpsBaseSeed: Number(dpsBase) || 0,
+
         ivGrowth: Number(ivg)||0,
         dpsGrowth: (dpsg==='' || dpsg==null) ? '' : Number(dpsg)||0,
         years: parseInt(years)||0,
@@ -1114,18 +1120,31 @@
   }
 
   function renderDerived(){
-    // latest bases
+    // latest bases (override → historical → seeds)
+    const histIv  = latestIVBase(form.historical);
+    const histDps = latestDPSBase(form.dps);
+    const seedIv  = Number(form.ivBaseSeed)||0;
+    const seedDps = Number(form.dpsBaseSeed)||0;
+
     const ivBaseLatest = (()=>{
       const ov = parseFloat(form.ivOverride);
-      if(isFinite(ov) && ov>0) return ov;
-      return latestIVBase(form.historical);
+      if (isFinite(ov) && ov>0) return ov;
+      return histIv || seedIv;
     })();
-    const dpsBaseLatest = latestDPSBase(form.dps);
-    $("#ivLatest").textContent = currency(latestIVBase(form.historical));
+
+    const dpsBaseLatest = (()=>{
+      const ov = parseFloat(form.dpsOverride);
+      if (isFinite(ov) && ov>0) return ov;
+      return histDps || seedDps;
+    })();
+
+    // show “Latest” on the form
+    $("#ivLatest").textContent  = currency(histIv || seedIv);
     $("#dpsLatest").textContent = currency(dpsBaseLatest);
 
-    const ivBaseLatestEff = (isFinite(parseFloat(form.ivOverride)) && parseFloat(form.ivOverride)>0) ? parseFloat(form.ivOverride) : latestIVBase(form.historical);
-    const dpsBaseEff = (isFinite(parseFloat(form.dpsOverride)) && parseFloat(form.dpsOverride)>0) ? parseFloat(form.dpsOverride) : dpsBaseLatest;
+    // values used by scenarios
+    const ivBaseLatestEff = ivBaseLatest;
+    const dpsBaseEff      = dpsBaseLatest;
 
     const params = {
       ivBase: ivBaseLatestEff||0,
@@ -1197,12 +1216,14 @@
     const rows = companies.map(c=>{
       const h = c.historical||[];
       const d = c.dps||[];
-      const ivBaseLatest = latestIVBase(h);
-      const ov = parseFloat(c.ivOverride);
-      const ivBase = (isFinite(ov) && ov>0) ? ov : ivBaseLatest;
-      const dpsBaseRaw = latestDPSBase(d);
+      const ivBaseLatest = latestIVBase(h) || (Number(c.ivBaseSeed)||0);
+      const ivOv = parseFloat(c.ivOverride);
+      const ivBase = (isFinite(ivOv) && ivOv>0) ? ivOv : ivBaseLatest;
+
+      const dpsBaseRaw = latestDPSBase(d) || (Number(c.dpsBaseSeed)||0);
       const dpsOv = parseFloat(c.dpsOverride);
       const dpsBase = (isFinite(dpsOv) && dpsOv>0) ? dpsOv : dpsBaseRaw;
+
       const gIV = parseFloat(c.ivGrowth)||0;
       const gD = (c.dpsGrowth===""||c.dpsGrowth===null||c.dpsGrowth===undefined)? gIV : (parseFloat(c.dpsGrowth)||0);
       const years = parseInt(c.years)||0;
