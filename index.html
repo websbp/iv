@@ -140,6 +140,53 @@
         padding-top:8px; margin-top:8px;
       }
     }
+
+    /* --- iPhone mini view (≤ 420px) --- */
+    @media (max-width: 420px){
+      /* Hide top header & buttons */
+      header h1,
+      header p.muted,
+      #newCompany,
+      #saveCompany { display:none !important; }
+
+      /* Watchlist: hide title, Export, and tip */
+      #watchlist > h2,
+      #btnExportAll,
+      #watchlist .help { display:none !important; }
+
+      /* Watchlist: turn each row into a 2-line tile */
+      #watchTable thead{ display:none !important; }
+      #watchTable tr{
+        display:grid !important;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "name  price"
+          "actn  mos";
+        gap:6px;
+        border:1px solid #1f2937; border-radius:12px;
+        padding:10px; margin:8px 0; background:#0f141b;
+      }
+      #watchTable td{ display:none !important; border:0; padding:0; }
+      #watchTable td::before{ content:none !important; }
+
+      /* Show only the 4 cells we want, in positions */
+      #watchTable td.col-company{ display:block !important; grid-area:name;  font-weight:600; }
+      #watchTable td.col-price  { display:block !important; grid-area:price; text-align:right; }
+      #watchTable td.col-action { display:block !important; grid-area:actn;  color:#cbd5e1; }
+      #watchTable td.col-mos    { display:block !important; grid-area:mos;   text-align:right; }
+
+      /* Company editor: hide A2 paste & quick tips (the 2-grid row) */
+      #c_paste,
+      #parsePaste,
+      #addHistRow { display:none !important; }
+
+      /* Hide the whole left grid that contains A2 + its label; also hide the right quick tips grid */
+      #company .row.cols-2 > .grid:first-child { display:none !important; }  /* A2 block */
+      #company .row.cols-2 > .grid:last-child  { display:none !important; }  /* Quick tips */
+
+      /* Historical block: hide the table; keep the chart */
+      #histTable { display:none !important; }
+    }
   </style>
 </head>
 <body>
@@ -166,7 +213,7 @@
     <!-- Growth segmented filter -->
     <div class="toolbar" style="margin:6px 0 10px">
       <div class="seg" role="tablist" aria-label="Growth Filter">
-        <button id="fltNone"    type="button" class="active" aria-selected="true">Show All</button>
+        <button id="fltNone"    type="button" class="active" aria-selected="true">All</button>
         <button id="fltHighBtn" type="button">High Growth</button>
         <button id="fltLowBtn"  type="button">Low Growth</button>
       </div>
@@ -370,6 +417,7 @@
     }catch(e){}
     wireWatchlistSort();
     renderWatchlist();
+    applyMobileHides();
 
     // If first time on this device (no local data), bootstrap from Google Sheet
     if (!companies || companies.length === 0) {
@@ -1210,6 +1258,15 @@
     });
   }
 
+  function applyMobileHides(){
+    if (!window.matchMedia('(max-width: 420px)').matches) return;
+
+    // Hide the "A. Historical IV" <h2> above the chart
+    const histCard = document.querySelector('#chartArea')?.closest('.card');
+    const h2 = histCard?.querySelector('h2');
+    if (h2) h2.style.display = 'none';
+  }
+
   function renderWatchlist(){
     const tb = $("#watchTable tbody"); tb.innerHTML="";
     // Build derived rows
@@ -1262,12 +1319,13 @@
     list.forEach(r=>{
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td class="nowrap" data-label="Company" style="font-weight:600">
-          ${r.name} 
+        <td class="nowrap col-company" data-label="Company" style="font-weight:600">
+          ${r.name}
         </td>
-        <td data-label="Current Price" class="num">${currency(r.currentPrice)}</td>
-        <td data-label="MOS"><span class="${r.cls}">${isFinite(r.mos)? (r.mos*100).toFixed(1)+"%":"-"}</span></td>
-        <td data-label="Action">${r.action}</td>
+        <td class="num col-price" data-label="Current Price">${currency(r.currentPrice)}</td>
+        <td class="col-mos" data-label="MOS"><span class="${r.cls}">${isFinite(r.mos)? (r.mos*100).toFixed(1)+"%":"-"}</span></td>
+        <td class="col-action" data-label="Action">${r.action}</td>
+
         <td data-label="Year" class="num">${r.years||0}</td>
         <td data-label="CAGR%" class="num">${isFinite(r.cagr)? (r.cagr*100).toFixed(2)+"%":"-"}</td>
         <td data-label="IV Base" class="num">${currency(r.ivBase)}</td>
@@ -1275,7 +1333,7 @@
         <td data-label="DPS" class="num">${currency(r.dpsBase)}</td>
         <td data-label="DPSg%" class="num">${(r.dpsg||0).toFixed(2)}%</td>
         <td data-label="Notes" class="muted">${r.notes}</td>
-        <td data-label="Delete" class="num"><button class="btn small danger">Delete</button></td>
+        <td class="num col-delete" data-label="Delete"><button class="btn small danger">Delete</button></td>
       `;
       tr.addEventListener("click",(e)=>{
         if(e.target && e.target.closest("button")) return;
