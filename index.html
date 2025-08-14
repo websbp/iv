@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Intrinsic Value & DPS Dashboard (Offline)</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#11161d; --muted:#6b7280; --text:#e5e7eb; --accent:#2563eb;
+      --green:#10b981; --yellow:#eab308; --orange:#f59e0b; --red:#ef4444;
+      --emerald:#059669;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans",sans-serif;background:var(--bg);color:var(--text)}
+    .container{max-width:1200px;margin:0 auto;padding:24px}
+    h1{font-size:1.6rem;margin:0 0 4px}
+    p.muted{color:var(--muted);margin:0 0 16px}
+    .row{display:grid;grid-gap:12px}
+    @media(min-width:900px){.row.cols-2{grid-template-columns:1fr 1fr}.row.cols-3{grid-template-columns:repeat(3,1fr)}}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 1px 0 rgba(255,255,255,0.03) inset}
+    .card h2{margin:0 0 10px;font-size:1.1rem}
+    .btn{display:inline-flex;align-items:center;gap:8px;border:1px solid #334155;background:#18202b;color:#e5e7eb;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .btn.primary{background:var(--accent);border-color:#1d4ed8}
+    .btn.danger{background:#7f1d1d;border-color:#991b1b}
+    .btn.small{padding:4px 8px;font-size:.85rem}
+    .grid{display:grid;gap:8px}
+    label{font-size:.85rem;color:var(--muted)}
+    input, textarea, select{width:100%;background:#0f141b;border:1px solid #243042;border-radius:10px;padding:8px;color:var(--text)}
+    textarea{min-height:130px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    th, td{padding:8px;border-bottom:1px solid #223044;text-align:left}
+    th.sortable{cursor:pointer; user-select:none}
+    th.sortable .arrow{opacity:.6; margin-left:6px}
+    th.sortable.active{color:#e5e7eb}
+    th{text-align:left;color:#aab1bd;font-weight:600}
+    td.num{text-align:right;font-variant-numeric:tabular-nums}
+    .muted{color:var(--muted)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#0f172a;border:1px solid #1f2a44;font-size:.8rem}
+    .pill{padding:2px 8px;border-radius:8px}
+    .pill.yellow{background:#3d3006;color:#f5e6a1}
+    .pill.green{background:#082f25;color:#b7f3df}
+    .pill.dg{background:#05241d;color:#d6fff5}
+    .pill.lg{background:#1d3a2f;color:#d4ffe9}
+    .pill.lo{background:#3b2a05;color:#ffe4b3}
+    .pill.o{background:#3c2103;color:#ffd1a6}
+    .pill.r{background:#3b0a0a;color:#ffc7c7}
+    .tabs{display:flex;gap:8px;margin:8px 0 16px}
+    .tabs button{background:#15202e;border:1px solid #243042;color:#cbd5e1;border-radius:10px;padding:8px 12px}
+    .tabs button.active{background:#1f2a44}
+    .flex{display:flex;gap:8px;align-items:center}
+    .right{margin-left:auto}
+    .svg-wrap{height:380px}
+    .footer{color:#9ca3af;font-size:.8rem;margin-top:6px}
+    .help{font-size:.85rem;color:#9aa3b2}
+    .actions{display:flex;gap:8px;justify-content:flex-end}
+    .nowrap{white-space:nowrap}
+    /* Segmented growth filter */
+    .seg {
+      display:inline-flex; border:1px solid #334155; border-radius:10px; overflow:hidden;
+    }
+    .seg button {
+      background:#18202b; color:#cbd5e1; border:0; padding:6px 12px; cursor:pointer;
+    }
+    .seg button + button { border-left:1px solid #334155; }
+    .seg button.active { background:#2563eb; color:#ffffff; }
+    /* --- Mobile-friendly tweaks --- */
+
+    /* Toolbar (filter + ↻) wraps nicely, refresh sticks to the right when space allows */
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .toolbar .right{margin-left:auto}
+
+    @media (max-width: 900px){
+      .container{padding:16px}
+      h1{font-size:1.25rem}
+      .btn.small{padding:6px 10px}
+      th,td{padding:6px}
+    }
+
+    /* Chart height scales down on phones */
+    @media (max-width: 560px){
+      .svg-wrap{height:240px}
+    }
+    @media (max-width: 420px){
+      .svg-wrap{height:200px}
+    }
+
+    /* Watchlist (new order):
+      (1) Company (2) Current (3) MOS (4) Action (5) Year (6) CAGR%
+      (7) IV Base (8) IVg% (9) DPS (10) DPSg% (11) Notes (12) Delete
+    */
+
+    /* <= 900px: hide Notes */
+    @media (max-width: 900px){
+      #watchTable th:nth-child(11), #watchTable td:nth-child(11){ display:none; }
+    }
+
+    /* <= 720px: hide DPSg% */
+    @media (max-width: 720px){
+      #watchTable th:nth-child(10), #watchTable td:nth-child(10){ display:none; }
+    }
+
+    /* <= 560px: hide DPS */
+    @media (max-width: 560px){
+      #watchTable th:nth-child(9),  #watchTable td:nth-child(9){ display:none; }
+    }
+
+    /* <= 480px: hide IV Base (keep Company, Current, MOS, Action, Year, CAGR%) */
+    @media (max-width: 480px){
+      #watchTable th:nth-child(7),  #watchTable td:nth-child(7){ display:none; }
+    }
+
+    /* SUPER-compact "card" mode for very small screens: table -> stacked cards */
+    @media (max-width: 420px){
+      #watchTable thead{display:none}
+      #watchTable, #watchTable tbody, #watchTable tr, #watchTable td{display:block;width:100%}
+      #watchTable tr{
+        border:1px solid #1f2937; border-radius:12px; padding:8px; margin-bottom:10px; background:#0f141b;
+      }
+      #watchTable td{border:0; padding:6px 0; display:grid; grid-template-columns:120px 1fr; align-items:center}
+      #watchTable td[data-label="Company"]{grid-template-columns:1fr; font-weight:600; padding-top:2px}
+      #watchTable td[data-label="Company"] .badge{margin-left:6px}
+      #watchTable td::before{
+        content:attr(data-label);
+        color:#9aa3b2; margin-right:8px; font-size:.9rem;
+      }
+      /* Delete button row aligns right */
+      #watchTable td[data-label="Delete"]{display:flex;justify-content:flex-end}
+    }
+
+    /* Make header action buttons flexible on phones */
+    @media (max-width: 560px){
+      header .actions{flex-wrap:wrap; gap:8px}
+      header .actions .btn{flex:1 1 auto}
+    }
+
+    /* Company editor: make "actions" rows sticky on mobile for easy Save */
+    @media (max-width: 560px){
+      .actions.sticky-bottom{
+        position:sticky; bottom:-1px; background:linear-gradient(180deg, rgba(11,15,20,0), rgba(11,15,20,0.85) 30%, rgba(11,15,20,1));
+        padding-top:8px; margin-top:8px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header class="flex">
+    <div>
+      <h1>Intrinsic Value & DPS Dashboard</h1>
+      <p class="muted">Offline, single-file app. Data persists to your browser.</p>
+    </div>
+    <div class="right actions">
+      <button id="newCompany" class="btn">New Company</button>
+      <button id="saveCompany" class="btn primary">Save to Watchlist</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="watchlist" class="active">Watchlist</button>
+    <button data-tab="company">Company Editor</button>
+    <button data-tab="rules">Rules</button>
+  </nav>
+
+  <section id="watchlist" class="card">
+    <h2>Watchlist</h2>
+    <!-- Growth segmented filter -->
+    <div class="toolbar" style="margin:6px 0 10px">
+      <div class="seg" role="tablist" aria-label="Growth Filter">
+        <button id="fltNone"    type="button" class="active" aria-selected="true">Show All</button>
+        <button id="fltHighBtn" type="button">High Growth</button>
+        <button id="fltLowBtn"  type="button">Low Growth</button>
+      </div>
+      <div class="right">
+        <button id="btnExportAll" class="btn small" type="button">⇪ Export</button>
+        <button id="btnRefreshAll" class="btn small" type="button">↻ Refresh</button>
+      </div>
+    </div>    
+    <div class="help">Tip: Click a row to edit the company.</div>
+    <div style="overflow:auto">
+      <table id="watchTable">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Current Price</th>
+            <th>MOS</th><th>Action</th>
+            <th>Yr</th><th>CAGR%</th>
+            <th>IV Base</th><th>IVg%</th>
+            <th>DPS</th><th>DPSg%</th>
+            <th>Notes</th><th> </th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="company" class="card" style="display:none">
+    <h2>Company Info</h2>
+    <div class="row cols-3">
+      <div class="grid">
+        <label>Company</label>
+        <input id="c_name" placeholder="e.g., DBS Group"/>
+      </div>
+      <div class="grid">
+        <label>Ticker</label>
+        <input id="c_ticker" placeholder="e.g., D05.SI"/>
+      </div>
+      <div class="grid">
+        <label>Current Price</label>
+        <input id="c_price" type="number" step="0.01" value="0"/>
+      </div>
+    </div>
+
+    <div class="row cols-2" style="margin-top:12px">
+      <div class="grid">
+        <label>A2. Paste historical block</label>
+        <textarea id="c_paste"></textarea>
+        <div class="actions sticky-bottom">
+          <button id="parsePaste" class="btn">Parse & Fill</button>
+          <button id="addHistRow" class="btn">Add Row</button>
+        </div>
+      </div>
+      <div class="grid">
+        <label>Quick tips</label>
+        <ul class="help" style="margin-top:0">
+          <li>Columns: FY, IV Max, IV Conservative, IV Base, Price Min, Price Max</li>
+          <li>We auto-calc 15% &amp; 25% discounts to IV Base.</li>
+          <li>Use Parse to fill the table instantly.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>A. Historical IV</h2>
+      <div style="overflow:auto">
+        <table id="histTable">
+          <thead>
+            <tr>
+              <th>FY</th><th>IV Max</th><th>IV Conservative</th><th>IV Base</th>
+              <th>15% Disc</th><th>25% Disc</th><th>Price Min</th><th>Price Max</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="svg-wrap" id="chartArea"></div>
+    </div>
+
+    <div class="card">
+      <h2>B. DPS</h2>
+      <div class="flex">
+        <div class="help">Enter yearly DPS. “Total Return” defaults to Ordinary + Special, but can be overridden.</div>
+        <div class="right"><button id="addDpsRow" class="btn">Add Row</button></div>
+      </div>
+      <div style="overflow:auto">
+        <table id="dpsTable">
+          <thead>
+            <tr>
+              <th>FY</th><th>Ordinary DPS</th><th>Special DPS</th><th>Total Return</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>C. Projected IV & DPS</h2>
+      <div class="row cols-3">
+        <div class="grid">
+          <label>IV Base (latest FY)</label>
+          <div id="ivLatest" style="font-weight:700;font-size:1.1rem">-</div>
+        </div>
+        <div class="grid">
+          <label>Override IV Base (optional)</label>
+          <input id="ivOverride" type="number" step="0.01" />
+        </div>
+        <div class="grid">
+          <label>DPS Base (latest FY)</label>
+          <div id="dpsLatest" style="font-weight:700;font-size:1.1rem">-</div>
+        </div>
+      </div>
+      <div class="row cols-3" style="margin-top:8px">
+        <div class="grid">
+          <label>Override DPS Base (optional)</label>
+          <input id="dpsOverride" type="number" step="0.01" />
+        </div>
+      </div>
+      <div class="row cols-3" style="margin-top:8px">
+        <div class="grid">
+          <label>IV Growth %</label>
+          <input id="ivGrowth" type="number" step="0.01" value="6" />
+        </div>
+        <div class="grid">
+          <label>DPS Growth % (default = IV Growth)</label>
+          <input id="dpsGrowth" type="number" step="0.01" placeholder="(blank to match IV g%)" />
+        </div>
+        <div class="grid">
+          <label>Years</label>
+          <input id="years" type="number" step="1" value="5" />
+        </div>
+      </div>
+      <div class="row cols-3" style="margin-top:8px">
+        <div class="grid">
+          <label>Current Price (basis for Scenario A)</label>
+          <input id="basisPrice" type="number" step="0.01" />
+        </div>
+      </div>
+
+      <div id="scenarios" class="row cols-2" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="rules" class="card" style="display:none">
+    <h2>Margin of Safety (MOS) → Action mapping</h2>
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr><th>MOS Min</th><th>MOS Max</th><th>MOS (vs IV)</th><th>Action</th><th>Notes</th><th>Color</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>30%</td><td>unlimited</td><td>≥ 30%</td><td>Back up the truck</td><td>Highest conviction; add aggressively.</td><td>Dark green</td></tr>
+          <tr><td>20%</td><td>30%</td><td>20–29%</td><td>Strong Buy</td><td>Build position quickly.</td><td>Green</td></tr>
+          <tr><td>10%</td><td>20%</td><td>10–19%</td><td>Buy</td><td>Add steadily.</td><td>Light green</td></tr>
+          <tr><td>0%</td><td>10%</td><td>0–9%</td><td>Nibble / Watch</td><td>Small buys only; wait for better price.</td><td>Yellow</td></tr>
+          <tr><td>-10%</td><td>0%</td><td>−0–10% (premium)</td><td>Hold</td><td>Don’t add; monitor.</td><td>Light Orange</td></tr>
+          <tr><td>-20%</td><td>-10%</td><td>−10–20% (premium)</td><td>Trim</td><td>Take profits, rebalance.</td><td>Orange</td></tr>
+          <tr><td>unlimited</td><td>-20%</td><td>< −20% (premium)</td><td>Sell / Exit</td><td>Price well above IV; redeploy capital.</td><td>Red</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="footer">MOS = (IV Base − Basis Price) / IV Base. Basis Price depends on scenario (Current / IV Base / 15% Disc / 25% Disc).</p>
+  </section>
+
+  <div class="footer">All data is stored via localStorage. No network access required.</div>
+</div>
+
+<script>
+(function(){
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  const STORAGE = "iv_dps_watchlist_min_v1";
+  let companies = [];
+  let watchSortKey = 'name';
+  let watchSortDir = 'asc';
+  let form = emptyCompany();
+  // Growth filter state
+  let filterMode = 'none'; // 'none' | 'low' | 'high'
+
+  function emptyCompany(){
+    return {
+      id: crypto.randomUUID(),
+      name: "", ticker: "", currentPrice: 0,
+      historical: [],
+      dps: [],
+      ivGrowth: 6,
+      dpsGrowth: "", // blank = default to ivGrowth
+      years: 5,
+      ivOverride: "",
+      dpsOverride: "",
+      pasteText: "Dec\tIV Max\tIV Conservative\tIV Base\tPrice Min\tPrice Max\n2018\t36.00\t19.00\t25.00\t15.00\t24.00\n2019\t30.10\t23.20\t25.10\t19.00\t27.00\n2020\t40.00\t27.60\t34.20\t27.00\t29.00\n2021\t40.20\t30.00\t33.50\t27.00\t30.00\n2022\t46.30\t33.80\t38.60\t29.00\t35.00\n2023\t48.90\t36.00\t39.00\t35.00\t44.00\n2024\t49.08\t32.30\t42.15\t45.00\t51.00"
+    };
+  }
+
+  function load(){
+    wireWatchlistSort();
+    try{
+      const raw = localStorage.getItem(STORAGE);
+      if(raw) companies = JSON.parse(raw);
+    }catch(e){}
+    wireWatchlistSort();
+    renderWatchlist();
+
+    // If first time on this device (no local data), bootstrap from Google Sheet
+    if (!companies || companies.length === 0) {
+      (async ()=>{
+        try{
+          const snap = await pullFromGoogle();
+          if (snap && snap.watchlist && snap.watchlist.rows && snap.watchlist.rows.length){
+            companies = rowsToCompanies(snap);
+            persist();
+            renderWatchlist();
+          }
+        }catch(err){
+          console.log('Initial pull failed:', err);
+        }
+      })();
+    }
+  }
+
+  function persist(){
+    try{ localStorage.setItem(STORAGE, JSON.stringify(companies)); }catch(e){}
+  }
+
+  function currency(n){
+    if (!isFinite(n)) return "-";
+    return Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function pct(n){
+    if(!isFinite(n)) return "-";
+    return (n*100).toFixed(2)+"%";
+  }
+  function mosRule(m){
+    if(!isFinite(m)) return {action:"-", notes:"-", cls:""};
+    const p=m*100;
+    if(p>=30) return {action:"LoadUp",notes:"Highest conviction; add aggressively.", cls:"pill dg"};
+    if(p>=20) return {action:"Strong Buy",notes:"Build position quickly.", cls:"pill green"};
+    if(p>=10) return {action:"Buy",notes:"Add steadily.", cls:"pill lg"};
+    if(p>=0) return {action:"Nibble",notes:"Small buys only; wait for better price.", cls:"pill yellow"};
+    if(p>=-10) return {action:"Hold",notes:"Don’t add; monitor.", cls:"pill lo"};
+    if(p>=-20) return {action:"Trim",notes:"Take profits, rebalance.", cls:"pill o"};
+    return {action:"Exit",notes:"Price well above IV; redeploy capital.", cls:"pill r"};
+  }
+  function parseHistorical(text){
+    const lines = (text||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if(!lines.length) return [];
+    let i=0; if(/iv|price|fy|dec/i.test(lines[0])) i=1;
+    const out=[];
+    for(;i<lines.length;i++){
+      const parts = lines[i].replace(/\s+/g,"\t").split("\t");
+      if(parts.length<5) continue;
+      const [fyStr, ivMax, ivCons, ivBase, pMin, pMax] = parts;
+      const ivb = parseFloat(ivBase);
+      out.push({
+        fy: /^\d{4}$/.test(fyStr)? Number(fyStr): fyStr,
+        ivMax: parseFloat(ivMax)||0,
+        ivConservative: parseFloat(ivCons)||0,
+        ivBase: ivb||0,
+        priceMin: parseFloat(pMin)||0,
+        priceMax: parseFloat(pMax)||0,
+      });
+    }
+    out.sort((a,b)=> (a.fy>b.fy?1:-1));
+    return out;
+  }
+
+  function latestIVBase(rows){
+    if(!rows.length) return 0;
+    const last = rows.slice().sort((a,b)=>(a.fy>b.fy?1:-1)).pop();
+    return Number(last.ivBase)||0;
+  }
+  function latestDPSBase(dps){
+    if(!dps.length) return 0;
+    // find latest FY
+    const sorted = dps.slice().sort((a,b)=>(a.fy>b.fy?1:-1));
+    const last = sorted[sorted.length-1];
+    let tot = parseFloat(last.totalReturn);
+    if(!isFinite(tot)) tot = (+last.ordinary||0) + (+last.special||0);
+    return Number(tot)||0;
+  }
+  function calcScenario({ivBase, dpsBase, gIV, gDPS, years, basisPrice}){
+    const y = Math.max(0, Math.floor(years||0));
+    const rIV = (gIV||0)/100;
+    const rD  = (gDPS===""||gDPS===null||gDPS===undefined ? (gIV||0) : Number(gDPS))/100;
+    const IVn = ivBase * Math.pow(1+rIV, y);
+    const endDPS = dpsBase * Math.pow(1+rD, Math.max(0,y));
+    const cumDPS = rD === 0 ? dpsBase * y : dpsBase * ((Math.pow(1 + rD, y + 1) - (1 + rD)) / rD);
+
+    const totalValue = IVn + cumDPS;
+    const basis = basisPrice>0? basisPrice: NaN;
+    const totalReturnPct = isFinite(basis)? (totalValue-basis)/basis : NaN;
+    const cagrPct = (isFinite(basis) && y>0)? Math.pow(totalValue/basis, 1/y) - 1 : NaN;
+    const mosPct = ivBase>0? (ivBase - (basisPrice||0))/ivBase : NaN;
+    const rule = mosRule(mosPct);
+    return {IVn,endDPS,cumDPS,totalValue,totalReturnPct,cagrPct,mosPct,rule};
+  }
+  // --- Price fetch helper (uses Yahoo Spark via CORS-friendly proxy) ---
+  async function fetchQuote(symbol){
+    const params = new URLSearchParams({
+      symbols: symbol,
+      range: '1d',
+      interval: '1d',
+      indicators: 'close',
+      includeTimestamps: 'false',
+      includePrePost: 'false',
+      corsDomain: 'finance.yahoo.com',
+      '.tsrc': 'finance'
+    });
+
+    const proxUrl = `https://r.jina.ai/http://query1.finance.yahoo.com/v7/finance/spark?${params.toString()}`;
+    const res = await fetch(proxUrl, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+
+    let text = await res.text(), json;
+    try { 
+      json = JSON.parse(text);
+    } catch {
+      const first = text.indexOf('{'), last = text.lastIndexOf('}');
+      if (first === -1 || last === -1 || last <= first) throw new Error('Proxy returned non-JSON');
+      json = JSON.parse(text.slice(first, last+1));
+    }
+
+    const price = json?.spark?.result?.[0]?.response?.[0]?.indicators?.quote?.[0]?.close?.[0];
+    if (!Number.isFinite(price)) throw new Error('close[0] not found');
+    return Number(price);
+  }
+  // Refresh prices for companies currently visible under the active filter
+  async function refreshVisiblePrices(){
+    const btn = document.getElementById('btnRefreshAll');
+    if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+
+    // Pick companies according to the segmented filter
+    const targets = (companies || []).filter(c => {
+      const g = parseFloat(c.ivGrowth) || 0;
+      if (filterMode === 'low')  return g <= 3.5;
+      if (filterMode === 'high') return g > 3.5;
+      return true; // 'none' => all
+    });
+
+    // Fetch all in parallel and update currentPrice
+    await Promise.all(targets.map(async (c) => {
+      const t = (c.ticker || '').trim();
+      if (!t) return;
+      try {
+        const px = await fetchQuote(t);
+        if (Number.isFinite(px)) c.currentPrice = Number(px);
+      } catch (_) {
+        // keep existing price on failure
+      }
+    }));
+
+    // Persist and refresh UI
+    try { localStorage.setItem(STORAGE, JSON.stringify(companies)); } catch (_) {}
+    renderWatchlist();
+
+    // If an editor form is open, mirror the updated price into inputs
+    if (form && form.id) {
+      const cur = companies.find(x => x.id === form.id);
+      if (cur) {
+        form.currentPrice = cur.currentPrice || form.currentPrice;
+        const priceInput = document.getElementById('c_price');
+        const basisInput = document.getElementById('basisPrice');
+        if (priceInput) priceInput.value = form.currentPrice || 0;
+        if (basisInput) basisInput.value = form.currentPrice || 0;
+        // Optional: renderDerived(); // not necessary if renderWatchlist recomputed already
+      }
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+  }
+
+  // === Google Sheet Export ===
+  // We store the Web App URL in localStorage so you only paste it once.
+  const SHEETS_WEBAPP_URL_KEY = 'sheets_webapp_url';
+
+  // 👉 Your default deployment URL (change this to your Apps Script web app URL)
+  const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbx72tIThAm82hFj_CndPfG-yenf4_w6o5VrfzXCMPfK2DKwrLCxVFUjK_b52I9UJxzL/exec';
+
+  // --- Normalize keys for matching ---
+  function normalizeKey(obj){
+    const company = String((obj?.name ?? '')).trim();
+    const ticker  = String((obj?.ticker ?? '')).trim().toUpperCase();
+    return { company, ticker };
+  }
+
+  // --- Build trimmed rows for ONE company (no derived fields) ---
+  function buildCompanyPayload(c){
+    const h = c.historical || [];
+    const d = c.dps || [];
+
+    const ivBaseLatest = latestIVBase(h);
+    const ivOv  = parseFloat(c.ivOverride);
+    const ivEff = (Number.isFinite(ivOv)  && ivOv  > 0) ? ivOv  : ivBaseLatest;
+
+    const dpsBaseRaw = latestDPSBase(d);
+    const dpsOv = parseFloat(c.dpsOverride);
+    const dpsEff = (Number.isFinite(dpsOv) && dpsOv > 0) ? dpsOv : dpsBaseRaw;
+
+    const gIV   = parseFloat(c.ivGrowth) || 0;
+    const gD    = (c.dpsGrowth === "" || c.dpsGrowth == null) ? gIV : (parseFloat(c.dpsGrowth) || 0);
+    const years = parseInt(c.years) || 0;
+
+    return {
+      watchlist: {
+        headers: ["Company","Ticker","Year","IV Base","IVg %","DPS","DPSg %","IV Override","DPS Override"],
+        rows: [[
+          c.name || "", (c.ticker || "").toUpperCase(), years,
+          ivEff, gIV, dpsEff, gD,
+          (Number.isFinite(ivOv)  ? ivOv  : ""),
+          (Number.isFinite(dpsOv) ? dpsOv : "")
+        ]]
+      },
+      historical: {
+        headers: ["Company","Ticker","FY","IV Max","IV Conservative","IV Base","Price Min","Price Max"],
+        rows: h.map(r => [
+          c.name || "", (c.ticker || "").toUpperCase(),
+          r.fy, r.ivMax || 0, r.ivConservative || 0, r.ivBase || 0, r.priceMin || 0, r.priceMax || 0
+        ])
+      },
+      dps: {
+        headers: ["Company","Ticker","FY","Ordinary DPS","Special DPS","Total Return"],
+        rows: d.map(r => {
+          const total = Number.isFinite(+r.totalReturn) ? +r.totalReturn : ((+r.ordinary || 0) + (+r.special || 0));
+          return [c.name || "", (c.ticker || "").toUpperCase(), r.fy, r.ordinary || 0, r.special || 0, total];
+        })
+      }
+    };
+  }
+
+  // --- Push exactly one company; supports op: 'upsert' | 'delete', with prevKeys for renames ---
+  async function pushCompanyToGoogle(company, op, prevKeys){
+    const url = getSheetsUrlInteractive();
+    if (!url) return;
+
+    const pkgRows = buildCompanyPayload(company);
+    const keysNow = normalizeKey(company);
+    const keysPrev = prevKeys ? normalizeKey(prevKeys) : null;
+
+    const payload = {
+      scope: "company",
+      op: (op || "upsert"),
+      keys: keysNow,            // new keys (after save) OR keys to delete
+      prevKeys: keysPrev,       // previous keys (before save) to clean up on rename
+      ...pkgRows,
+      meta: { updatedAt: new Date().toISOString(), source: "webapp-local" }
+    };
+
+    const finalUrl = url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    const res = await fetch(finalUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request, no preflight
+      body: JSON.stringify(payload)
+    });
+    // Optional: inspect response
+    // const txt = await res.text(); console.log('pushCompanyToGoogle:', txt);
+    await res.text();
+  }
+  
+  // ---  Pull snapshot from Google (no preflight: text/plain POST) ---
+  async function pullFromGoogle(){
+    const url = getSheetsUrlInteractive();
+    if (!url) return null;
+    const payload = { scope: 'pull' };
+    const finalUrl = url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    const res = await fetch(finalUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const txt = await res.text();
+    let j;
+    try { j = JSON.parse(txt); } catch { throw new Error('Invalid JSON from pull'); }
+    if (!j || !j.ok) throw new Error('Pull failed');
+    return j;
+  }
+
+  // --- Convert sheet rows into local companies model (trimmed schema) ---
+  function rowsToCompanies(snapshot){
+    const wl  = snapshot?.watchlist?.rows  || [];
+    const his = snapshot?.historical?.rows || [];
+    const dps = snapshot?.dps?.rows        || [];
+
+    // Group by Company|Ticker
+    const map = new Map();
+    wl.forEach(row => {
+      // ["Company","Ticker","Year","IV Base","IVg %","DPS","DPSg %","IV Override","DPS Override"]
+      const [company, ticker, years, ivBase, ivg, dpsBase, dpsg, ivOv, dpsOv] = row;
+      const key = String(company||'').trim() + '|' + String(ticker||'').trim().toUpperCase();
+      map.set(key, {
+        id: crypto.randomUUID(),
+        name: String(company||'').trim(),
+        ticker: String(ticker||'').trim().toUpperCase(),
+        currentPrice: 0,
+        historical: [],
+        dps: [],
+        ivGrowth: Number(ivg)||0,
+        dpsGrowth: (dpsg==='' || dpsg==null) ? '' : Number(dpsg)||0,
+        years: parseInt(years)||0,
+        ivOverride: (ivOv==='' || ivOv==null) ? '' : Number(ivOv),
+        dpsOverride:(dpsOv==='' || dpsOv==null) ? '' : Number(dpsOv),
+        pasteText: "" // optional; you can keep empty
+      });
+    });
+
+    // Attach historical rows: ["Company","Ticker","FY","IV Max","IV Conservative","IV Base","Price Min","Price Max"]
+    his.forEach(r=>{
+      const [company,ticker,fy,ivMax,ivCons,ivBase,pMin,pMax] = r;
+      const key = String(company||'').trim() + '|' + String(ticker||'').trim().toUpperCase();
+      const c = map.get(key); if (!c) return;
+      c.historical.push({
+        fy, ivMax: Number(ivMax)||0, ivConservative: Number(ivCons)||0, ivBase: Number(ivBase)||0,
+        priceMin: Number(pMin)||0, priceMax: Number(pMax)||0
+      });
+    });
+
+    // Attach DPS rows: ["Company","Ticker","FY","Ordinary DPS","Special DPS","Total Return"]
+    dps.forEach(r=>{
+      const [company,ticker,fy,ordinary,special,totalReturn] = r;
+      const key = String(company||'').trim() + '|' + String(ticker||'').trim().toUpperCase();
+      const c = map.get(key); if (!c) return;
+      c.dps.push({
+        fy, ordinary: Number(ordinary)||0, special: Number(special)||0,
+        totalReturn: (totalReturn===''||totalReturn==null) ? undefined : Number(totalReturn)
+      });
+    });
+
+    // Optional: sort embedded arrays by FY
+    map.forEach(c=>{
+      c.historical.sort((a,b)=> (a.fy>b.fy?1:-1));
+      c.dps.sort((a,b)=> (a.fy>b.fy?1:-1));
+    });
+
+    return Array.from(map.values());
+  }
+
+
+  function getSheetsUrlInteractive(){
+    let url = localStorage.getItem(SHEETS_WEBAPP_URL_KEY) || '';
+    // 1) First-time: silently use your default and persist it
+    if (!url && DEFAULT_SHEETS_URL) {
+      url = DEFAULT_SHEETS_URL;
+      try { localStorage.setItem(SHEETS_WEBAPP_URL_KEY, url); } catch(_) {}
+    }
+    // 2) (Optional) If you still want an interactive prompt when no default is set
+    if (!url) {
+      url = prompt('Paste your Google Apps Script Web App URL:', '');
+      if (!url) return null;
+      try { localStorage.setItem(SHEETS_WEBAPP_URL_KEY, url); } catch(_) {}
+    }
+    return url;
+  }
+
+  function collectExportData(){
+    const watchlistRows = [];
+    const historicalRows = [];
+    const dpsRows = [];
+
+    (companies || []).forEach(c => {
+      const h = c.historical || [];
+      const d = c.dps || [];
+
+      const ivBaseLatest = latestIVBase(h);
+      const ivOv = parseFloat(c.ivOverride);
+      const ivBase = (Number.isFinite(ivOv) && ivOv > 0) ? ivOv : ivBaseLatest;
+
+      const dpsBaseRaw = latestDPSBase(d);
+      const dpsOv = parseFloat(c.dpsOverride);
+      const dpsBase = (Number.isFinite(dpsOv) && dpsOv > 0) ? dpsOv : dpsBaseRaw;
+
+      const gIV = parseFloat(c.ivGrowth) || 0;
+      const gD  = (c.dpsGrowth === "" || c.dpsGrowth == null) ? gIV : (parseFloat(c.dpsGrowth) || 0);
+      const years = parseInt(c.years) || 0;
+
+      // --- WATCHLIST ROW (trimmed: only inputs / base values) ---
+      watchlistRows.push([
+        c.name || "",           // Company
+        c.ticker || "",         // Ticker
+        years,                  // Year
+        ivBase,                 // IV Base (effective, incl. override if any)
+        gIV,                    // IVg %
+        dpsBase,                // DPS (effective base)
+        gD,                     // DPSg %
+        (Number.isFinite(ivOv)  ? ivOv  : ""), // IV Override (optional)
+        (Number.isFinite(dpsOv) ? dpsOv : "")  // DPS Override (optional)
+      ]);
+
+      // --- HISTORICAL ROWS ---
+      h.forEach(r => {
+        historicalRows.push([
+          c.name || "", c.ticker || "",
+          r.fy, r.ivMax || 0, r.ivConservative || 0, r.ivBase || 0, r.priceMin || 0, r.priceMax || 0
+        ]);
+      });
+
+      // --- DPS ROWS ---
+      d.forEach(r => {
+        const total = Number.isFinite(+r.totalReturn)
+          ? +r.totalReturn
+          : ((+r.ordinary || 0) + (+r.special || 0));
+        dpsRows.push([
+          c.name || "", c.ticker || "",
+          r.fy, r.ordinary || 0, r.special || 0, total
+        ]);
+      });
+    });
+
+    // Headers (trimmed watchlist; derived fields removed, overrides added for fidelity)
+    const headers = {
+      watchlist: ["Company","Ticker","Year","IV Base","IVg %","DPS","DPSg %","IV Override","DPS Override"],
+      historical:["Company","Ticker","FY","IV Max","IV Conservative","IV Base","Price Min","Price Max"],
+      dps:       ["Company","Ticker","FY","Ordinary DPS","Special DPS","Total Return"]
+    };
+
+    return { headers, data: { watchlist: watchlistRows, historical: historicalRows, dps: dpsRows } };
+  }
+
+  async function exportAllToGoogle(){
+  const url = getSheetsUrlInteractive();
+  if (!url) return;
+
+  const { headers, data } = collectExportData();
+    const nowIso = new Date().toISOString();
+    const payload = {
+      watchlist:  { headers: headers.watchlist,  rows: data.watchlist },
+      historical: { headers: headers.historical, rows: data.historical },
+      dps:        { headers: headers.dps,        rows: data.dps },
+      meta: { updatedAt: nowIso, source: 'webapp-local' } // <-- prepare for LWW
+    };
+
+    const btn = document.getElementById('btnExportAll');
+    if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+    try {
+      const finalUrl = url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      const res = await fetch(finalUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request (no preflight)
+        body: JSON.stringify(payload)
+      });
+      const txt = await res.text();
+      console.log('Export response:', txt);
+      let msg = `Export complete @ ${nowIso}`;
+      try {
+        const j = JSON.parse(txt);
+        if (j && j.ok) msg = `Exported: WL ${j.rows?.watchlist||'-'}, Hist ${j.rows?.historical||'-'}, DPS ${j.rows?.dps||'-'} @ ${nowIso}`;
+      } catch {}
+      alert(msg);
+    } catch (err) {
+      alert('Export failed: ' + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⇪ Export'; }
+    }
+  }
+
+  // (Optional) Hold Shift while clicking Export to reconfigure the URL
+  function wireExportButton(){
+    const b = document.getElementById('btnExportAll');
+    if (!b) return;
+    b.addEventListener('click', (e)=>{
+      if (e.shiftKey) {
+        localStorage.removeItem(SHEETS_WEBAPP_URL_KEY);
+        alert('Cleared saved Web App URL. You will be asked again on next export.');
+        return;
+      }
+      exportAllToGoogle();
+    });
+  }
+
+
+  // --- UI State ---
+  const tabs = $$(".tabs button");
+  tabs.forEach(btn=>btn.addEventListener("click",()=>{
+    tabs.forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    ["watchlist","company","rules"].forEach(id=> $("#"+id).style.display = (btn.dataset.tab===id? "block":"none"));
+  }));
+
+  // Buttons
+  $("#newCompany").addEventListener("click",()=>{
+    form = emptyCompany();
+    bindForm();
+    tabs.forEach(b=>{b.classList.remove("active"); if(b.dataset.tab==="company") b.classList.add("active");});
+    ["watchlist","company","rules"].forEach(id=> $("#"+id).style.display = (id==="company"?"block":"none"));
+  });
+
+  $("#saveCompany").addEventListener("click",()=>{
+    if(!form.name || !form.ticker){ alert("Please enter Company and Ticker."); return; }
+
+    // 1) capture previous company (for rename-safe upsert)
+    let prevCompany = null;
+    const idx = companies.findIndex(x=>x.id===form.id);
+    if (idx >= 0) prevCompany = JSON.parse(JSON.stringify(companies[idx]));
+
+    // 2) save locally (fast, local-first)
+    if(idx>=0) companies[idx]=JSON.parse(JSON.stringify(form));
+    else companies.push(JSON.parse(JSON.stringify(form)));
+    persist();
+    renderWatchlist();
+    alert("Saved to watchlist.");
+
+    // 3) push only this company to Google Sheet (upsert; send prev keys too)
+    pushCompanyToGoogle(form, 'upsert', prevCompany).catch(()=>{ /* optional toast */ });
+
+    // go to watchlist
+    tabs.forEach(b=>{b.classList.remove("active"); if(b.dataset.tab==="watchlist") b.classList.add("active");});
+    ["watchlist","company","rules"].forEach(id=> $("#"+id).style.display = (id==="watchlist"?"block":"none"));
+  });
+
+  // Growth segmented filter wiring
+  const bLow  = document.getElementById('fltLowBtn');
+  const bHigh = document.getElementById('fltHighBtn');
+  const bNone = document.getElementById('fltNone');
+
+  function setFilter(mode){
+    filterMode = mode;
+    [bLow, bHigh, bNone].forEach(b => b && b.classList.remove('active'));
+    if (mode === 'low'  && bLow)  bLow.classList.add('active');
+    if (mode === 'high' && bHigh) bHigh.classList.add('active');
+    if (mode === 'none' && bNone) bNone.classList.add('active');
+    renderWatchlist();
+  }
+
+  if (bLow)  bLow.addEventListener('click',  ()=> setFilter('low'));
+  if (bHigh) bHigh.addEventListener('click', ()=> setFilter('high'));
+  if (bNone) bNone.addEventListener('click', ()=> setFilter('none'));
+
+  // Ensure initial UI is consistent
+  setFilter('none');
+
+  // Watchlist bulk refresh button
+  const btnRefreshAll = document.getElementById('btnRefreshAll');
+  if (btnRefreshAll) btnRefreshAll.addEventListener('click', () => {
+    refreshVisiblePrices().catch(() => {
+      // fail-safe: re-enable button
+      btnRefreshAll.disabled = false;
+      btnRefreshAll.textContent = '↻ Refresh';
+    });
+  });
+
+  // export button
+  wireExportButton();
+
+  // Company form widgets
+  function bindForm(){
+    $("#c_name").value = form.name;
+    $("#c_ticker").value = form.ticker;
+    $("#c_price").value = form.currentPrice||0;
+    $("#c_paste").value = form.pasteText||"";
+    $("#ivOverride").value = form.ivOverride||"";
+    $("#dpsOverride").value = form.dpsOverride||"";
+    $("#ivGrowth").value = form.ivGrowth||6;
+    $("#dpsGrowth").value = form.dpsGrowth||"";
+    $("#years").value = form.years||5;
+    $("#basisPrice").value = form.currentPrice||0;
+    renderHistTable();
+    renderDpsTable();
+    renderDerived();
+  }
+  $("#c_name").addEventListener("input",(e)=>{form.name=e.target.value;});
+  $("#c_ticker").addEventListener("input",(e)=>{form.ticker=e.target.value.toUpperCase();});
+  $("#c_price").addEventListener("input",(e)=>{form.currentPrice=parseFloat(e.target.value)||0; $("#basisPrice").value=form.currentPrice||0; renderDerived();});
+  $("#parsePaste").addEventListener("click",()=>{
+    const rows = parseHistorical($("#c_paste").value);
+    if(!rows.length){ alert("Nothing parsed. Check your text."); return; }
+    form.historical = rows;
+    renderHistTable();
+    renderDerived();
+  });
+  $("#addHistRow").addEventListener("click",()=>{
+    const lastFY = form.historical.length? form.historical[form.historical.length-1].fy : new Date().getFullYear();
+    form.historical.push({fy:lastFY,ivMax:0,ivConservative:0,ivBase:0,priceMin:0,priceMax:0});
+    renderHistTable();
+    renderDerived();
+  });
+  $("#addDpsRow").addEventListener("click",()=>{
+    const lastFY = form.dps.length? form.dps[form.dps.length-1].fy : new Date().getFullYear();
+    form.dps.push({fy:lastFY,ordinary:0,special:0,totalReturn:0});
+    renderDpsTable();
+    renderDerived();
+  });
+  $("#ivOverride").addEventListener("input",(e)=>{form.ivOverride=e.target.value; renderDerived();});
+  $("#dpsOverride").addEventListener("input",(e)=>{form.dpsOverride=e.target.value; renderDerived();});
+  $("#ivGrowth").addEventListener("input",(e)=>{form.ivGrowth=parseFloat(e.target.value)||0; renderDerived();});
+  $("#dpsGrowth").addEventListener("input",(e)=>{form.dpsGrowth=e.target.value; renderDerived();});
+  $("#years").addEventListener("input",(e)=>{form.years=parseInt(e.target.value)||0; renderDerived();});
+  $("#basisPrice").addEventListener("input",(e)=>{form.currentPrice=parseFloat(e.target.value)||0; renderDerived();});
+
+  function renderHistTable(){
+    const tb = $("#histTable tbody"); tb.innerHTML="";
+    form.historical.forEach((r,idx)=>{
+      const tr = document.createElement("tr");
+      const mk = (html)=>{const td=document.createElement("td"); td.innerHTML=html; return td;}
+      tr.appendChild(mk(`<input value="${r.fy}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.ivMax??""}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.ivConservative??""}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.ivBase??""}">`));
+      const ivb = Number(r.ivBase)||0;
+      tr.appendChild(mk(`<div class="num">${currency(ivb*0.85)}</div>`));
+      tr.appendChild(mk(`<div class="num">${currency(ivb*0.75)}</div>`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.priceMin??""}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.priceMax??""}">`));
+      const del = document.createElement("td");
+      del.innerHTML = `<button class="btn small danger">Delete</button>`;
+      tr.appendChild(del);
+
+      // bind
+      tr.children[0].firstChild.addEventListener("input",(e)=>{r.fy=e.target.value; renderDerived();});
+      tr.children[1].firstChild.addEventListener("input",(e)=>{r.ivMax=parseFloat(e.target.value)||0; renderDerived();});
+      tr.children[2].firstChild.addEventListener("input",(e)=>{r.ivConservative=parseFloat(e.target.value)||0; renderDerived();});
+      tr.children[3].firstChild.addEventListener("input",(e)=>{r.ivBase=parseFloat(e.target.value)||0; renderDerived();});
+      tr.children[6].firstChild.addEventListener("input",(e)=>{r.priceMin=parseFloat(e.target.value)||0; renderDerived();});
+      tr.children[7].firstChild.addEventListener("input",(e)=>{r.priceMax=parseFloat(e.target.value)||0; renderDerived();});
+      del.firstChild.addEventListener("click",()=>{form.historical.splice(idx,1); renderHistTable(); renderDerived();});
+      tb.appendChild(tr);
+    });
+    renderChart();
+  }
+
+  function renderDpsTable(){
+    const tb = $("#dpsTable tbody"); tb.innerHTML="";
+    form.dps.forEach((r,idx)=>{
+      const tr = document.createElement("tr");
+      const mk = (html)=>{const td=document.createElement("td"); td.innerHTML=html; return td;}
+      tr.appendChild(mk(`<input value="${r.fy}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.ordinary??""}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.special??""}">`));
+      tr.appendChild(mk(`<input type="number" step="0.01" value="${r.totalReturn??""}">`));
+      const del = document.createElement("td");
+      del.innerHTML = `<button class="btn small danger">Delete</button>`;
+      tr.appendChild(del);
+
+      tr.children[0].firstChild.addEventListener("input",(e)=>{r.fy=e.target.value; renderDerived();});
+      tr.children[1].firstChild.addEventListener("input",(e)=>{r.ordinary=parseFloat(e.target.value)||0; if(!isFinite(+r.totalReturn)) r.totalReturn=(r.ordinary||0)+(r.special||0); renderDerived();});
+      tr.children[2].firstChild.addEventListener("input",(e)=>{r.special=parseFloat(e.target.value)||0; if(!isFinite(+r.totalReturn)) r.totalReturn=(r.ordinary||0)+(r.special||0); renderDerived();});
+      tr.children[3].firstChild.addEventListener("input",(e)=>{r.totalReturn=parseFloat(e.target.value); renderDerived();});
+      del.firstChild.addEventListener("click",()=>{form.dps.splice(idx,1); renderDpsTable(); renderDerived();});
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderChart(){
+    const el = $("#chartArea"); el.innerHTML="";
+    const rows = form.historical.slice().sort((a,b)=>(a.fy>b.fy?1:-1));
+    if(!rows.length){ el.innerHTML='<div class="help">No data to chart.</div>'; return; }
+    const pad=40, w=el.clientWidth||800, h=el.clientHeight||360, left=55, right=20, top=20, bottom=30;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS,"svg");
+    svg.setAttribute("width","100%"); svg.setAttribute("height","100%");
+    svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+    el.appendChild(svg);
+
+    const xs = rows.map(r=>r.fy);
+    const vals = [];
+    rows.forEach(r=>{
+      vals.push(r.ivBase||0, r.ivConservative||0, (r.ivBase||0)*0.85, (r.ivBase||0)*0.75, r.priceMin||0, r.priceMax||0);
+    });
+    const minV = Math.min(...vals);
+    const maxV = Math.max(...vals);
+    const y0 = Math.max(0, Math.floor(minV*0.9));
+    const y1 = Math.ceil(maxV*1.1);
+    const innerW = w-left-right, innerH = h-top-bottom;
+
+    function xPos(i){ return left + (i/(xs.length-1||1))*innerW; }
+    function yPos(v){ return top + (1-(v-y0)/(y1-y0||1))*innerH; }
+
+    // grid
+    const grid = document.createElementNS(svgNS,"g");
+    grid.setAttribute("stroke","#223044"); grid.setAttribute("stroke-width","1");
+    const steps=5;
+    for(let i=0;i<=steps;i++){
+      const yy = top + (i/steps)*innerH;
+      const line = document.createElementNS(svgNS,"line");
+      line.setAttribute("x1",left); line.setAttribute("x2",left+innerW); line.setAttribute("y1",yy); line.setAttribute("y2",yy);
+      grid.appendChild(line);
+      const label = document.createElementNS(svgNS,"text");
+      label.setAttribute("x",8); label.setAttribute("y",yy+4); label.setAttribute("fill","#93a3b5"); label.setAttribute("font-size","11");
+      const v = y1 - (i/steps)*(y1-y0);
+      label.textContent = v.toFixed(2);
+      svg.appendChild(label);
+    }
+    svg.appendChild(grid);
+
+    // x labels
+    xs.forEach((fy,i)=>{
+      const tx = document.createElementNS(svgNS,"text");
+      tx.setAttribute("x", xPos(i)); tx.setAttribute("y", h-8);
+      tx.setAttribute("fill","#93a3b5"); tx.setAttribute("font-size","11"); tx.setAttribute("text-anchor","middle");
+      tx.textContent = fy;
+      svg.appendChild(tx);
+    });
+
+    // price band (min->max) as vertical skinny rects
+    rows.forEach((r,i)=>{
+      const x = xPos(i) - Math.min(10, innerW/(xs.length*2||2));
+      const wBand = Math.min(20, innerW/(xs.length||1));
+      const yTop = yPos(r.priceMax||0);
+      const yBot = yPos(r.priceMin||0);
+      const rect = document.createElementNS(svgNS,"rect");
+      rect.setAttribute("x",x); rect.setAttribute("y",yTop);
+      rect.setAttribute("width",wBand); rect.setAttribute("height",Math.max(0,yBot-yTop));
+      rect.setAttribute("fill","#fbbf24"); rect.setAttribute("opacity","100");
+      svg.appendChild(rect);
+    });
+
+    function drawLine(getVal, color, dash){
+      const pts = rows.map((r,i)=> [xPos(i), yPos(getVal(r))]);
+      const p = document.createElementNS(svgNS,"path");
+      p.setAttribute("fill","none"); p.setAttribute("stroke",color); p.setAttribute("stroke-width","2");
+      if(dash) p.setAttribute("stroke-dasharray",dash);
+      p.setAttribute("d", "M"+pts.map(([x,y])=>`${x},${y}`).join(" L "));
+      svg.appendChild(p);
+    }
+    drawLine(r=>r.ivConservative||0, "#22c55e", "6 4");
+    drawLine(r=>r.ivBase||0, "#60a5fa");
+    drawLine(r=>(r.ivBase||0)*0.85, "#f59e0b", "6 4");
+    drawLine(r=>(r.ivBase||0)*0.75, "#f87171", "2 6");
+
+    // legend
+    const legend = [
+      ["IV Conservative","#22c55e","6 4"],
+      ["IV Base","#60a5fa",""],
+      ["15% Disc","#f59e0b","6 4"],
+      ["25% Disc","#f87171","2 6"],
+      ["Price Range","#fbbf24",""]
+    ];
+    let lx = left, ly = top-6;
+    legend.forEach(([name,color,dash])=>{
+      const g = document.createElementNS(svgNS,"g");
+      if(dash==="band"){
+        const rect = document.createElementNS(svgNS,"rect"); rect.setAttribute("x",lx); rect.setAttribute("y",ly-12);
+        rect.setAttribute("width","16"); rect.setAttribute("height","8"); rect.setAttribute("fill",color); rect.setAttribute("opacity","0.25"); g.appendChild(rect);
+      }else{
+        const line = document.createElementNS(svgNS,"line"); line.setAttribute("x1",lx); line.setAttribute("x2",lx+16);
+        line.setAttribute("y1",ly-8); line.setAttribute("y2",ly-8); line.setAttribute("stroke",color); line.setAttribute("stroke-width","3");
+        if(dash) line.setAttribute("stroke-dasharray",dash); g.appendChild(line);
+      }
+      const text = document.createElementNS(svgNS,"text"); text.setAttribute("x",lx+22); text.setAttribute("y",ly-5);
+      text.setAttribute("fill","#cbd5e1"); text.setAttribute("font-size","12"); text.textContent=name; g.appendChild(text);
+      svg.appendChild(g);
+      lx += 120;
+    });
+  }
+
+  function renderDerived(){
+    // latest bases
+    const ivBaseLatest = (()=>{
+      const ov = parseFloat(form.ivOverride);
+      if(isFinite(ov) && ov>0) return ov;
+      return latestIVBase(form.historical);
+    })();
+    const dpsBaseLatest = latestDPSBase(form.dps);
+    $("#ivLatest").textContent = currency(latestIVBase(form.historical));
+    $("#dpsLatest").textContent = currency(dpsBaseLatest);
+
+    const ivBaseLatestEff = (isFinite(parseFloat(form.ivOverride)) && parseFloat(form.ivOverride)>0) ? parseFloat(form.ivOverride) : latestIVBase(form.historical);
+    const dpsBaseEff = (isFinite(parseFloat(form.dpsOverride)) && parseFloat(form.dpsOverride)>0) ? parseFloat(form.dpsOverride) : dpsBaseLatest;
+
+    const params = {
+      ivBase: ivBaseLatestEff||0,
+      dpsBase: dpsBaseEff||0,
+      gIV: parseFloat(form.ivGrowth)||0,
+      gDPS: (form.dpsGrowth==="" ? form.ivGrowth : parseFloat(form.dpsGrowth)||0),
+      years: parseInt(form.years)||0,
+    };
+    const scenarios = {
+      curr: calcScenario({...params, basisPrice: parseFloat(form.currentPrice)||0}),
+      base: calcScenario({...params, basisPrice: ivBaseLatestEff||0}),
+      d15:  calcScenario({...params, basisPrice: (ivBaseLatestEff||0)*0.85}),
+      d25:  calcScenario({...params, basisPrice: (ivBaseLatestEff||0)*0.75}),
+    };
+
+    const cont = $("#scenarios"); cont.innerHTML="";
+    [
+      ["A. Based on Current Price","curr"],
+      ["B. Based on IV Base Price","base"],
+      ["C. Based on 15% IV Base Disc","d15"],
+      ["D. Based on 25% IV Base Disc","d25"],
+    ].forEach(([title,key])=>{
+      const s = scenarios[key];
+      const card = document.createElement("div");
+      card.className="card";
+      const mos = isFinite(s.mosPct)? (s.mosPct*100).toFixed(1)+"%" : "-";
+      card.innerHTML = `
+        <h2 style="margin-bottom:6px">${title}</h2>
+        <div class="flex" style="margin-bottom:6px">
+          <span class="${s.rule.cls}">MOS: ${mos}</span>
+          <span class="badge">${s.rule.action}</span>
+        </div>
+        <div class="row cols-2">
+          <div>IV at Year N</div><div class="num"><b>${currency(s.IVn)}</b></div>
+          <div>End DPS (Year N)</div><div class="num">${currency(s.endDPS)}</div>
+          <div>Cumulative DPS</div><div class="num">${currency(s.cumDPS)}</div>
+          <div>Total Value</div><div class="num"><b>${currency(s.totalValue)}</b></div>
+          <div>Total Return %</div><div class="num">${isFinite(s.totalReturnPct)? (s.totalReturnPct*100).toFixed(2)+"%":"-"}</div>
+          <div>CAGR %</div><div class="num">${isFinite(s.cagrPct)? (s.cagrPct*100).toFixed(2)+"%":"-"}</div>
+          <div class="muted" style="grid-column:1/-1">Action note: ${s.rule.notes}</div>
+        </div>`;
+      cont.appendChild(card);
+    });
+    renderWatchlist(); // update MOS etc if editing current company
+  }
+
+  
+  function wireWatchlistSort(){
+    const hdrs = $$('#watchTable thead th.sortable');
+    hdrs.forEach(th=>{
+      th.addEventListener('click', ()=>{
+        const key = th.getAttribute('data-key');
+        if(watchSortKey===key){ watchSortDir = (watchSortDir==='asc'?'desc':'asc'); }
+        else { watchSortKey=key; watchSortDir='asc'; }
+        hdrs.forEach(h=>h.classList.remove('active'));
+        th.classList.add('active');
+        // set arrows
+        hdrs.forEach(h=>{ const a=h.querySelector('.arrow'); if(a) a.textContent=''; });
+        const a = th.querySelector('.arrow');
+        if(a) a.textContent = watchSortDir==='asc' ? '▲' : '▼';
+        renderWatchlist();
+      });
+    });
+  }
+
+  function renderWatchlist(){
+    const tb = $("#watchTable tbody"); tb.innerHTML="";
+    // Build derived rows
+    const rows = companies.map(c=>{
+      const h = c.historical||[];
+      const d = c.dps||[];
+      const ivBaseLatest = latestIVBase(h);
+      const ov = parseFloat(c.ivOverride);
+      const ivBase = (isFinite(ov) && ov>0) ? ov : ivBaseLatest;
+      const dpsBaseRaw = latestDPSBase(d);
+      const dpsOv = parseFloat(c.dpsOverride);
+      const dpsBase = (isFinite(dpsOv) && dpsOv>0) ? dpsOv : dpsBaseRaw;
+      const gIV = parseFloat(c.ivGrowth)||0;
+      const gD = (c.dpsGrowth===""||c.dpsGrowth===null||c.dpsGrowth===undefined)? gIV : (parseFloat(c.dpsGrowth)||0);
+      const years = parseInt(c.years)||0;
+      const currentPrice = parseFloat(c.currentPrice)||0;
+      const sc = calcScenario({ivBase,dpsBase,gIV,gD,years,basisPrice:currentPrice});
+      return {
+        ref: c,
+        name: c.name||"-",
+        ticker: (c.ticker||"-"),
+        ivBase, ivg: gIV,
+        dpsBase, dpsg: gD,
+        currentPrice,
+        years,
+        cagr: sc.cagrPct,
+        mos: sc.mosPct,
+        action: sc.rule.action,
+        notes: sc.rule.notes,
+        cls: sc.rule.cls
+      };
+    });
+
+    // Apply segmented growth filter
+    const list = (filterMode === 'none') ? rows : rows.filter(r => {
+      const g = Number(r.ivg) || 0;
+      return (filterMode === 'low') ? (g <= 3.5) : (g > 3.5); // 'high'
+    });
+
+    // ALWAYS sort by CAGR% DESC (on the filtered list)
+    list.sort((a,b)=>{
+      const ax = (isFinite(a.cagr)? a.cagr : -Infinity);
+      const bx = (isFinite(b.cagr)? b.cagr : -Infinity);
+      return bx - ax;
+    });
+
+    // Render filtered list
+    list.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="nowrap" data-label="Company" style="font-weight:600">
+          ${r.name} 
+        </td>
+        <td data-label="Current Price" class="num">${currency(r.currentPrice)}</td>
+        <td data-label="MOS"><span class="${r.cls}">${isFinite(r.mos)? (r.mos*100).toFixed(1)+"%":"-"}</span></td>
+        <td data-label="Action">${r.action}</td>
+        <td data-label="Year" class="num">${r.years||0}</td>
+        <td data-label="CAGR%" class="num">${isFinite(r.cagr)? (r.cagr*100).toFixed(2)+"%":"-"}</td>
+        <td data-label="IV Base" class="num">${currency(r.ivBase)}</td>
+        <td data-label="IVg%" class="num">${(r.ivg||0).toFixed(2)}%</td>
+        <td data-label="DPS" class="num">${currency(r.dpsBase)}</td>
+        <td data-label="DPSg%" class="num">${(r.dpsg||0).toFixed(2)}%</td>
+        <td data-label="Notes" class="muted">${r.notes}</td>
+        <td data-label="Delete" class="num"><button class="btn small danger">Delete</button></td>
+      `;
+      tr.addEventListener("click",(e)=>{
+        if(e.target && e.target.closest("button")) return;
+        form = JSON.parse(JSON.stringify(r.ref));
+        bindForm();
+
+        // Auto-fetch latest price for this company (non-blocking)
+        (async ()=>{
+          const t = (form.ticker||'').trim();
+          if (!t) return;
+          try{
+            const px = await fetchQuote(t);
+            if (Number.isFinite(px)) {
+              form.currentPrice = px;
+              const priceInput = document.getElementById('c_price');
+              const basisInput = document.getElementById('basisPrice');
+              if (priceInput) priceInput.value = px;
+              if (basisInput) basisInput.value = px;
+              const idx = companies.findIndex(x=>x.id===form.id);
+              if (idx>=0) { companies[idx].currentPrice = px; try{ localStorage.setItem(STORAGE, JSON.stringify(companies)); }catch(e){} }
+              renderDerived();
+            }
+          }catch(_){}
+        })();
+
+        tabs.forEach(b=>{b.classList.remove("active"); if(b.dataset.tab==="company") b.classList.add("active");});
+        ["watchlist","company","rules"].forEach(id=> $("#"+id).style.display = (id==="company"?"block":"none"));
+      });
+
+      tr.querySelector("button").addEventListener("click",()=>{
+        if(!confirm("Delete this company from watchlist?")) return;
+
+        // capture the company we are deleting so we can tell the server which rows to remove
+        const toDelete = JSON.parse(JSON.stringify(r.ref));
+
+        companies = companies.filter(x=>x.id!==r.ref.id);
+        persist(); renderWatchlist();
+
+        // delete only this company’s rows from Google Sheet
+        pushCompanyToGoogle(toDelete, 'delete').catch(()=>{ /* optional toast */ });
+      });
+
+      tb.appendChild(tr);
+    });
+
+    // Empty state based on filtered list
+    if (list.length===0) {
+      const tr=document.createElement("tr");
+      const td=document.createElement("td"); 
+      td.colSpan=11; td.className="muted"; 
+      td.style.textAlign="center"; 
+      td.textContent="Empty. Click “New Company” to start.";
+      tr.appendChild(td); tb.appendChild(tr);
+    }
+  }
+
+  
+  let watchSortCol = -1, watchSortAsc = true;
+  function sortWatchlist(th){
+    const headers = Array.from(th.parentNode.children);
+    const idx = headers.indexOf(th);
+    if(watchSortCol === idx){ watchSortAsc = !watchSortAsc; } else { watchSortCol = idx; watchSortAsc = true; }
+    companies.sort((a,b)=>{
+      function getVal(c){
+        const h = c.historical||[];
+        const d = c.dps||[];
+        const ivBaseLatest = latestIVBase(h);
+        const ov = parseFloat(c.ivOverride);
+        const ivBase = (isFinite(ov) && ov>0) ? ov : ivBaseLatest;
+        const dpsBaseRaw = latestDPSBase(d);
+      const dpsOv = parseFloat(c.dpsOverride);
+      const dpsBase = (isFinite(dpsOv) && dpsOv>0) ? dpsOv : dpsBaseRaw;
+        const gIV = parseFloat(c.ivGrowth)||0;
+        const gD = (c.dpsGrowth===""||c.dpsGrowth===null||c.dpsGrowth===undefined)? gIV : (parseFloat(c.dpsGrowth)||0);
+        const years = parseInt(c.years)||0;
+        const currentPrice = parseFloat(c.currentPrice)||0;
+        const sc = calcScenario({ivBase,dpsBase,gIV,gD,years,basisPrice:currentPrice});
+        const cols = [
+          c.name||"", c.ticker||"", ivBase, gIV, dpsBase, gD, currentPrice,
+          (isFinite(sc.cagrPct)? sc.cagrPct : -Infinity),
+          (isFinite(sc.mosPct)? sc.mosPct : -Infinity),
+          sc.rule.action||"", sc.rule.notes||"", ""
+        ];
+        return cols[idx];
+      }
+      const va = getVal(a), vb = getVal(b);
+      if(typeof va==="string" && typeof vb==="string"){
+        return watchSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      } else {
+        return watchSortAsc ? (va - vb) : (vb - va);
+      }
+    });
+    persist();
+    renderWatchlist();
+  }
+
+  // init
+  load();
+  // mark default sort header arrow
+  def = document.querySelector('#watchTable thead th.sortable[data-key="'+watchSortKey+'"] .arrow'); 
+  if (def) def.textContent = '▲';
+  const defTh = document.querySelector('#watchTable thead th.sortable[data-key="'+watchSortKey+'"]');
+  if (defTh) defTh.classList.add('active');
+
+  // default paste content for new company
+  bindForm();
+})();
+</script>
+</body>
+</html>
