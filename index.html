@@ -379,7 +379,7 @@
     <p class="footer">MOS = (IV Base − Basis Price) / IV Base. Basis Price depends on scenario (Current / IV Base / 15% Disc / 25% Disc).</p>
   </section>
 
-  <div class="footer">v1.0.0.3</div>
+  <div class="footer">v1.0.0.5</div>
 </div>
 
 <script>
@@ -547,7 +547,7 @@
   // Refresh prices for companies currently visible under the active filter
   async function refreshVisiblePrices(){
     const btn = document.getElementById('btnRefreshAll');
-    if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
     // Pick companies according to the segmented filter
     const targets = (companies || []).filter(c => {
