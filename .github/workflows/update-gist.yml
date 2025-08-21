@@ -6,7 +6,7 @@ on:
       currency: { description: "sgd or usd", required: true, default: "sgd" }
       year:     { description: "YYYY",       required: true, default: "2025" }
       month:    { description: "Mon",        required: true, default: "Aug" }
-      value:    { description: "e.g. 2.70",  required: true, default: "2.70" }
+      value:    { description: "Number (e.g. 2.70)", required: true, default: "2.70" }
 
 jobs:
   update:
@@ -16,22 +16,52 @@ jobs:
       FILE_NAME: rf10y
       RAW_URL: https://gist.githubusercontent.com/websbp/fb7a8e9b365b5a05f47c6223b54c6676/raw/rf10y
     steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update -y && sudo apt-get install -y jq curl
+      - name: Install jq & curl
+        run: sudo apt-get update -y && sudo apt-get install -y jq curl
+
+      - name: Echo inputs
+        run: |
+          echo "currency=${{ inputs.currency }}"
+          echo "year=${{ inputs.year }}"
+          echo "month=${{ inputs.month }}"
+          echo "value=${{ inputs.value }}"
+
+      - name: Sanitize inputs
+        id: sanitize
+        run: |
+          CUR=$(echo "${{ inputs.currency }}" | tr '[:upper:]' '[:lower:]')
+          MON="${{ inputs.month }}"
+          YEAR="${{ inputs.year }}"
+          VAL_RAW="${{ inputs.value }}"
+          # strip any % and spaces
+          VAL=$(echo "$VAL_RAW" | tr -d ' %')
+          # validate month
+          case "$MON" in Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ;; *) echo "Bad month: $MON" ; exit 5 ;; esac
+          # validate currency
+          case "$CUR" in sgd|usd) ;; *) echo "Bad currency: $CUR" ; exit 5 ;; esac
+          # validate numeric
+          if ! echo "$VAL" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then echo "Value must be numeric"; exit 5; fi
+          echo "cur=$CUR"   >> $GITHUB_OUTPUT
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "month=$MON" >> $GITHUB_OUTPUT
+          echo "value=$VAL" >> $GITHUB_OUTPUT
 
       - name: Fetch current JSON
         run: |
+          set -e
+          echo "Fetching $RAW_URL"
           curl -sSL "$RAW_URL" -o store.json
-          jq . store.json > /dev/null  # validate
+          echo "Validating JSON..."
+          jq . store.json > /dev/null
+          echo "OK"
 
-      - name: Update JSON in-place
-        env:
-          CUR:   ${{ inputs.currency }}
-          YEAR:  ${{ inputs.year }}
-          MONTH: ${{ inputs.month }}
-          VAL:   ${{ inputs.value }}
+      - name: Update JSON
         run: |
-          CUR_KEY=$([ "$CUR" = "sgd" ] && echo rf10y_sgd || echo rf10y_usd)
+          set -e
+          CUR_KEY=$([ "${{ steps.sanitize.outputs.cur }}" = "sgd" ] && echo rf10y_sgd || echo rf10y_usd)
+          YEAR="${{ steps.sanitize.outputs.year }}"
+          MON="${{ steps.sanitize.outputs.month }}"
+          VAL="${{ steps.sanitize.outputs.value }}"
 
           # ensure objects exist
           jq --arg cur "$CUR_KEY" --arg y "$YEAR" '
@@ -40,18 +70,22 @@ jobs:
           ' store.json > tmp.json && mv tmp.json store.json
 
           # set numeric value at [cur][year][month]
-          jq --arg cur "$CUR_KEY" --arg y "$YEAR" --arg m "$MONTH" --argjson v ${VAL} \
+          jq --arg cur "$CUR_KEY" --arg y "$YEAR" --arg m "$MON" --argjson v "$VAL" \
              '.[$cur][$y][$m] = $v' store.json > updated.json
           mv updated.json store.json
-          jq . store.json  # show result
+
+          echo "Preview updated JSON root keys:"
+          jq 'keys' store.json
 
       - name: PATCH gist
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
+          set -e
           payload=$(jq -n --arg content "$(cat store.json)" '{files: {($ENV.FILE_NAME): {content: $content}}}')
+          echo "Patching Gist $GIST_ID file $FILE_NAME ..."
           curl -sS -X PATCH \
             -H "Authorization: Bearer $GIST_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$payload" \
-            "https://api.github.com/gists/$GIST_ID" | jq .
+            "https://api.github.com/gists/$GIST_ID" | jq '.files | keys'
