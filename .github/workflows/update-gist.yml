@@ -3,59 +3,55 @@ name: Update RF10Y Gist
 on:
   workflow_dispatch:
     inputs:
-      currency:
-        description: "sgd or usd"
-        required: true
-        default: "sgd"
-      year:
-        description: "YYYY (e.g. 2025)"
-        required: true
-        default: "2025"
-      month:
-        description: "Mon (Jan..Dec)"
-        required: true
-        default: "Aug"
-      value:
-        description: "Percent as number (e.g. 2.70)"
-        required: true
-        default: "2.70"
-      gist_id:
-        description: "Target Gist ID"
-        required: true
-        default: "fb7a8e9b365b5a05f47c6223b54c6676"
-      filename:
-        description: "Filename in gist"
-        required: true
-        default: "rf10y"
-      raw_url:
-        description: "Raw URL for reading current JSON"
-        required: true
-        default: "https://gist.githubusercontent.com/websbp/fb7a8e9b365b5a05f47c6223b54c6676/raw/rf10y"
+      currency: { description: "sgd or usd", required: true, default: "sgd" }
+      year:     { description: "YYYY",       required: true, default: "2025" }
+      month:    { description: "Mon",        required: true, default: "Aug" }
+      value:    { description: "e.g. 2.70",  required: true, default: "2.70" }
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      GIST_ID: fb7a8e9b365b5a05f47c6223b54c6676
+      FILE_NAME: rf10y
+      RAW_URL: https://gist.githubusercontent.com/websbp/fb7a8e9b365b5a05f47c6223b54c6676/raw/rf10y
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -y && sudo apt-get install -y jq curl
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      - name: Fetch current JSON
+        run: |
+          curl -sSL "$RAW_URL" -o store.json
+          jq . store.json > /dev/null  # validate
 
-      - name: Install dependencies
-        run: pip install requests
+      - name: Update JSON in-place
+        env:
+          CUR:   ${{ inputs.currency }}
+          YEAR:  ${{ inputs.year }}
+          MONTH: ${{ inputs.month }}
+          VAL:   ${{ inputs.value }}
+        run: |
+          CUR_KEY=$([ "$CUR" = "sgd" ] && echo rf10y_sgd || echo rf10y_usd)
 
-      - name: Run updater
+          # ensure objects exist
+          jq --arg cur "$CUR_KEY" --arg y "$YEAR" '
+            if .[$cur]|type!="object" then .[$cur]={} else . end
+            | if .[$cur][$y]|type!="object" then .[$cur][$y]={} else . end
+          ' store.json > tmp.json && mv tmp.json store.json
+
+          # set numeric value at [cur][year][month]
+          jq --arg cur "$CUR_KEY" --arg y "$YEAR" --arg m "$MONTH" --argjson v ${VAL} \
+             '.[$cur][$y][$m] = $v' store.json > updated.json
+          mv updated.json store.json
+          jq . store.json  # show result
+
+      - name: PATCH gist
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
-          python .github/scripts/update_gist.py \
-            --gist-id "${{ inputs.gist_id }}" \
-            --filename "${{ inputs.filename }}" \
-            --raw-url "${{ inputs.raw_url }}" \
-            --currency "${{ inputs.currency }}" \
-            --year "${{ inputs.year }}" \
-            --month "${{ inputs.month }}" \
-            --value "${{ inputs.value }}"
+          payload=$(jq -n --arg content "$(cat store.json)" '{files: {($ENV.FILE_NAME): {content: $content}}}')
+          curl -sS -X PATCH \
+            -H "Authorization: Bearer $GIST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://api.github.com/gists/$GIST_ID" | jq .
