@@ -1,0 +1,19 @@
+name: Update Gist
+
+on:
+  workflow_dispatch:   # lets you run manually from GitHub UI
+  schedule:
+    - cron: "0 0 * * *"   # optional: run daily at midnight UTC
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Update Gist
+        run: |
+          python3 .github/scripts/update_gist.py
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
